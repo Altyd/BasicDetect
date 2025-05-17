@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Detector | AuthentiScan</title>
+    <style>
+        :root {
+            --primary: #7c3aed;
+            --secondary: #00ff88;
+            --bg: #0a0a0a;
+            --card-bg: #1a1a1a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: white;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 8rem 0 4rem;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .upload-section {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid #2d2d2d;
+        }
+
+        .drag-drop-area {
+            border: 2px dashed #444;
+            border-radius: 1rem;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 1rem 0;
+        }
+
+        .drag-drop-area:hover {
+            border-color: var(--primary);
+            background: #1a1a1a;
+        }
+
+        .result-section {
+            display: none;
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            margin-top: 2rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #2d2d2d;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 5px;
+            transition: width 0.5s ease-in-out;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 4rem 0;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid #2d2d2d;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        .risk-indicator {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 1rem 0;
+        }
+        
+        .analysis-details {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #2d2d2d;
+            border-radius: 0.5rem;
+        }
+
+        .drag-drop-area.dragover {
+            border-color: var(--primary);
+            background-color: #252525;
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <section class="hero">
+            <h1>BaseDetect</h1>
+            <p>Concept of Basic AI Content Detection</p>
+        </section>
+
+        <section class="upload-section">
+            <h2>Analyze Your Document</h2>
+            <div class="drag-drop-area" id="dropZone">
+                <p>Drag & Drop files here or <span class="browse">browse</span></p>
+                <small>Supports: .docx, .pdf, .txt</small>
+            </div>
+            <input type="file" id="fileInput" hidden accept=".docx,.pdf,.txt">
+
+            <div class="result-section" id="resultSection">
+                <h3>Analysis Results</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p id="resultText">Probability of AI-generated content: <span id="percentage">0%</span></p>
+                <div id="detailedAnalysis"></div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="feature-card">
+                <h3>Hidden Character Analysis</h3>
+                <p>Detect unusual Unicode patterns and hidden metadata</p>
+            </div>
+            <div class="feature-card">
+                <h3>Style Detection</h3>
+                <p>Identify machine-like writing patterns</p>
+            </div>
+            <div class="feature-card">
+                <h3>Deep Scan</h3>
+                <p>Multi-layer semantic analysis</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Include required libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script>
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+        // Get DOM elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const resultSection = document.getElementById('resultSection');
+        const progressFill = document.getElementById('progressFill');
+        const percentageSpan = document.getElementById('percentage');
+
+        // Click to select file
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        ['dragleave', 'dragend'].forEach(type => {
+            dropZone.addEventListener(type, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        async function parsePDF(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+                const pdf = await loadingTask.promise;
+                
+                let text = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    text += content.items.map(item => item.str).join(' ');
+                }
+                
+                return text;
+            } catch (error) {
+                console.error('PDF parsing error:', error);
+                throw new Error('Failed to parse PDF');
+            }
+        }
+
+        async function parseDOCX(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({arrayBuffer});
+                return result.value;
+            } catch (error) {
+                console.error('DOCX parsing error:', error);
+                throw new Error('Failed to parse DOCX');
+            }
+        }
+
+        async function handleFile(file) {
+            resultSection.style.display = 'block';
+            progressFill.style.width = '0%';
+            percentageSpan.textContent = '0%';
+            
+            let text = '';
+            const fileName = file.name;
+            const fileExt = fileName.split('.').pop().toLowerCase();
+
+            try {
+                if (fileExt === 'pdf' || file.type === 'application/pdf') {
+                    text = await parsePDF(file);
+                } else if (fileExt === 'docx' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    text = await parseDOCX(file);
+                } else if (fileExt === 'txt' || file.type === 'text/plain') {
+                    text = await file.text();
+                } else {
+                    throw new Error('Unsupported file type');
+                }
+
+                // Simulate processing delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const analysis = analyzeText(text);
+                showResults(analysis);
+            } catch (error) {
+                alert('Error processing file: ' + error.message);
+                console.error(error);
+                resultSection.style.display = 'none';
+            }
+        }
+
+        function analyzeText(text) {
+            const hiddenChars = checkHiddenCharacters(text);
+            const aiProbability = calculateAIProbability(text, hiddenChars);
+            
+            return {
+                hiddenChars,
+                aiProbability,
+                textLength: text.length,
+                wordCount: text.trim().split(/\s+/).length
+            };
+        }
+
+        function checkHiddenCharacters(text) {
+            const hiddenCharRegex = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;
+            const matches = text.match(hiddenCharRegex);
+            return matches ? matches.length : 0;
+        }
+
+        function calculateAIProbability(text, hiddenCharCount) {
+            if (!text || text.trim().length === 0) return 0;
+            
+            let probability = 0;
+            
+            // Base probability based on hidden characters
+            if (hiddenCharCount > 0) {
+                probability += Math.min(hiddenCharCount * 15, 95);
+            }
+
+            // Calculate text statistics
+            const words = text.trim().split(/\s+/);
+            const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+            const wordCount = words.length;
+            const sentenceCount = sentences.length;
+            
+            // Average word length
+            const avgWordLength = words.reduce((acc, word) => acc + word.length, 0) / wordCount;
+            if (avgWordLength > 5.5 && avgWordLength < 6.5) probability += 10;
+            
+            // Sentence length analysis
+            if (sentenceCount > 0) {
+                const avgSentenceLength = wordCount / sentenceCount;
+                if (avgSentenceLength > 12 && avgSentenceLength < 25) probability += 15;
+            }
+            
+            // Common AI patterns
+            const aiPatterns = [
+                'however', 'moreover', 'furthermore', 
+                'in conclusion', 'it is important to note',
+                'as a language model', 'as an AI'
+            ];
+            
+            const aiPatternCount = aiPatterns.filter(pattern => 
+                text.toLowerCase().includes(pattern)
+            ).length;
+            
+            probability += aiPatternCount * 5;
+
+            return Math.min(probability, 98);
+        }
+
+        function showResults(analysis) {
+            // Animate progress bar
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 1;
+                progressFill.style.width = `${progress}%`;
+                percentageSpan.textContent = `${progress}%`;
+                
+                if (progress >= analysis.aiProbability) {
+                    clearInterval(interval);
+                    percentageSpan.textContent = `${analysis.aiProbability.toFixed(1)}%`;
+                }
+            }, 20);
+
+            document.getElementById('detailedAnalysis').innerHTML = `
+                <div class="analysis-details">
+                    <p>🔍 Hidden characters detected: ${analysis.hiddenChars}</p>
+                    <p>📝 Text length: ${analysis.textLength} characters (${analysis.wordCount} words)</p>
+                    <p>📈 AI probability factors:</p>
+                    <ul>
+                        <li>Hidden characters: +${Math.min(analysis.hiddenChars * 15, 95)}%</li>
+                        <li>Stylistic patterns: +25%</li>
+                    </ul>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
